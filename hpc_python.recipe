@@ -1,0 +1,63 @@
+# Create an apptainer environment that has everything I need for doing analysis
+# of the mdpi content.
+# Modified from amp_python and whisper recipes.
+
+Bootstrap: docker
+From: ubuntu:23.10
+
+%files
+
+
+%post
+# cuda requires a package libtinfo5 from lunar's universe (at least on 12/1/23)
+echo "deb http://archive.ubuntu.com/ubuntu/ lunar universe" >> /etc/apt/sources.list
+apt update -y
+apt upgrade -y
+
+# install the usual suspects.
+apt install -y \
+    python3 \
+    python3-boto3 python3-exif python3-filetype python3-graphviz \
+    python3-jsonschema python3-markdown python3-numpy \
+    python3-opencv python3-opencv-apps python3-paramiko python3-pil \
+    python3-pip python3-pip-whl python3-psutil python3-requests \
+    python3-requests-file python3-s3transfer python3-scipy python3-toml \
+    python3-urllib3 \
+    awscli curl imagemagick ffmpeg sox wget
+
+# other python packages...
+pip install --break-system-packages jiwer
+
+
+# install nvidia stuff
+here=`pwd`
+cd /root
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+dpkg -i cuda-keyring_1.1-1_all.deb
+apt update -y
+apt install -y cuda
+rm cuda-keyring_1.1-1_all.deb
+cd $here
+
+
+# install mediapipe (and the yamnet model for audio classifier)
+pip install --break-system-packages mediapipe
+mkdir -p /var/lib/mediapipe
+curl -o /var/lib/mediapipe/yamnet.tflite https://storage.googleapis.com/mediapipe-models/audio_classifier/yamnet/float32/latest/yamnet.tflite
+
+
+# install whisper 20231117 and models in /var/lib/whisper
+pip install --break-system-packages openai-whisper==20231117
+mkdir -p /var/lib/whisper
+python3 - <<EoF
+import sys
+import whisper
+for model in whisper.available_models():
+    whisper._download(whisper._MODELS[model], "/var/lib/whisper", False)
+
+EoF
+
+
+%runscript
+export WHISPER_MODEL_DIR=/var/lib/whisper
+exec python3 "$@"

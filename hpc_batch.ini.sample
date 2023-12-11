@@ -1,0 +1,11 @@
+[slurm]
+account=xxxx
+email=xxx@example.com
+concurrent=1
+max_content_time=21600  ; 6 hours
+
+[files]
+batchdir=/N/scratch/xxxxx
+results=/N/scratch/xxxxx
+tmpdir=/N/scratch/xxxxx
+

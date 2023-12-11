@@ -1,0 +1,18 @@
+#!/bin/bash -l
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+LOCKFILE=$SCRIPT_DIR/processing.lock
+
+export PATH=$HOME/bin:$PATH
+
+if [ -e $LOCKFILE ];
+    exit 0
+fi
+
+echo $$ > $LOCKFILE
+
+$SCRIPT_FILE/process_files.py
+RC=$?
+
+rm $LOCKFILE
+
+exit $RC
