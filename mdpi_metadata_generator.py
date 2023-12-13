@@ -31,7 +31,7 @@ def main():
     # that contains the batch.sh, <jobname>.{out,err}, etc.  This makes things
     # easier since we can store our performance data here without fear of overwriting
     # things!
-    batchname = Path('.').absolute().name()
+    batchname = Path('.').absolute().name
     # Create our performance object
     bperf = Performance(f"{batchname}.perf", f"Start processing batch {batchname}")        
     files: list[tuple[Path, Path, FFProbe]] = []    

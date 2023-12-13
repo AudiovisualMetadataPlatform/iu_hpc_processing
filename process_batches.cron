@@ -2,15 +2,15 @@
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 LOCKFILE=$SCRIPT_DIR/processing.lock
 
-export PATH=$HOME/bin:$PATH
+export PATH=$SCIRPT_DIR:$HOME/bin:$PATH
 
-if [ -e $LOCKFILE ];
+if [ -e $LOCKFILE ]; then
     exit 0
 fi
 
 echo $$ > $LOCKFILE
 
-$SCRIPT_FILE/process_files.py
+$SCRIPT_DIR/process_batches.py $@
 RC=$?
 
 rm $LOCKFILE

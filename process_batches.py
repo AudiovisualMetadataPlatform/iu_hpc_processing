@@ -1,4 +1,4 @@
-#!/usr/bin/env mdpi_python.sif
+#!/usr/bin/env python3
 
 import argparse
 import configparser
@@ -23,9 +23,9 @@ def main():
 
     # determine if we need to create new jobs
     slurm = Slurm(config['slurm']['account'], config['slurm']['email'])
-    job_info = slurm.get_job_info()    
-
-    needed_jobs = config['slurm']['max_concurrent'] - len(job_info)
+    job_info = slurm.get_job_info(active=True)    
+    logging.debug(job_info)
+    needed_jobs = int(config['slurm']['max_concurrent']) - len(job_info)
     if needed_jobs < 1:
         logging.debug("No jobs need to be created")
         exit(0)
@@ -33,29 +33,39 @@ def main():
     # since we need new jobs, let's look at what still needs to be done.
     # get job name -> job, since the job name is also the batch directory name.
     job_names = {}
-    for j in job_info.values():
+    for j in job_info.values():        
         job_names[j['name']] = j
-
 
     for dir in Path(config['files']['batchdir']).glob("*"):
         if dir.name.endswith(".finished"):
+            logging.debug(f"{dir.name} is already finished")
             # this one is finished.
             continue
-        if dir.name in job_names:
-            # this one is already in slurm, skip it.
+        
+        if dir.name.endswith(".building"):
+            # this one is in the process of being built, ignore it
+            logging.debug(f"{dir.name} is being built")
             continue
 
-        if (dir / "job.err").exists():
+        if not (dir / "batch.sh").exists():
+            # no batch.sh script, so skip it
+            logging.debug(f"{dir.name} has no batch.sh")
+            continue
+
+        if dir.name in job_names:
+            # this one is already in slurm, skip it.
+            logging.debug(f"{dir.name} is already in slurm")
+            continue
+
+
+
+        if (dir / "stderr.txt").exists():
             # this job has an stderr capture file which means that
             # it ran at least a little bit under slurm.  Since it's
             # not in slurm right now, we can go ahead and mark the
             # job as finished by renaming the directory
             logging.info(f"Marking batch {dir.name} as finished")
             dir.rename(dir.with_name(dir.name + ".finished"))
-            continue
-
-        if not (dir / "batch.sh").exists():
-            # no batch.sh script, so skip it
             continue
 
         jobid = slurm.submit(str(dir / "batch.sh"))
