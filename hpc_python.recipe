@@ -23,10 +23,11 @@ apt install -y \
     python3-pip python3-pip-whl python3-psutil python3-requests \
     python3-requests-file python3-s3transfer python3-scipy python3-toml \
     python3-urllib3 \
-    awscli curl imagemagick ffmpeg sox wget
+    awscli curl imagemagick ffmpeg sox wget \
+    mesa-utils libegl-mesa0 libegl1-mesa libgles2-mesa
 
 # other python packages...
-pip install --break-system-packages jiwer
+pip install --break-system-packages jiwer faster-whisper
 
 
 # install nvidia stuff

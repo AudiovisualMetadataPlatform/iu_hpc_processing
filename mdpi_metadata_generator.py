@@ -2,9 +2,12 @@
 
 import argparse
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from math import floor
+from multiprocessing import cpu_count
 import json
 import logging
 from pathlib import Path
+
 import subprocess
 import sys
 import tempfile
@@ -35,7 +38,15 @@ def main():
                         format="%(asctime)s [%(process)d:%(filename)s:%(lineno)d] [%(levelname)s] %(message)s")
 
     # set up our performance object.
-    perf = Performance(args.perf, f"Processing files in ", autosave=True)
+    perf = Performance(args.perf, autosave=True)
+
+    # how many threads should we really start?  ffmpeg tends to use lots of
+    # cpus per invocation, so we really don't want to do threads = cores.
+    # We want at least as many threads as we have file list partitions plus an
+    # additional thread do to the rest of the work.
+    ncpu = cpu_count()
+    nthreads = min(ncpu, floor(3 + ncpu / 2))
+    logging.info(f"Using {nthreads} threads on {ncpu} cpus")
 
     #  probe all of the files that we will need to process later.  Save the probe
     # data to the disk but keep it in memory too.    
@@ -45,7 +56,7 @@ def main():
         files.append(r)
         write_outfile(r[1], args.outdir, "probe", r[2].probe)
         
-    ppe = ThreadPoolExecutor()
+    ppe = ThreadPoolExecutor(nthreads)
     perf.mark('ffprobes')
     for filelist in args.filelist:
         for file in [Path(x) for x in filelist.read_text().splitlines()]:
@@ -55,7 +66,7 @@ def main():
     perf.checkpoint('ffprobes', len(files))
 
     # fire off all of our processes.
-    ppe = ProcessPoolExecutor()
+    ppe = ProcessPoolExecutor(nthreads)
     perf.mark("processing")
     def process_done_callback(fut: Future):
         try:
@@ -105,9 +116,12 @@ def do_whisper(todo: list, outdir: Path, language='en', device='auto', model='la
     perf.checkpoint("whisper-load-model", model, device)
 
     for audiospec in todo:        
-        listfile, audiofile, ffprobe = audiospec
-        
+        listfile, audiofile, ffprobe = audiospec        
         afile = str(audiofile.absolute())
+        if 'audio' not in ffprobe.get_stream_types():
+            logging.info(f"{afile}: Doesn't contain an audio stream.  Skipping")
+            continue
+
         logging.info(f"{afile}: Loading audio file")
         perf.mark("whisper-load-audio")
         audio = whisper.load_audio(afile)
@@ -190,11 +204,15 @@ def do_audioclassification(file: Path, probe: FFProbe, outdir: Path):
     model_path = "/var/lib/mediapipe/yamnet.tflite"
     perf = Performance(None)
     results = []
-    afile = str(file.absolute())    
+    afile = str(file.absolute())
+    if "audio" not in probe.get_stream_types():
+        logging.info(f"{afile}: doesn't contain an audio stream, skipping audioclassification")
+        return perf
+
     with tempfile.TemporaryDirectory() as tmpdir:
         perf.mark("audioclassification-cvt2wav")
         tfile = tmpdir + "/wavefile.wav"
-        logging.info(f"{afile}: Converting to wav")
+        logging.info(f"{afile}: Converting to wav")                
         p = subprocess.run(['ffmpeg', '-i', afile, tfile],
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     encoding='utf-8')
