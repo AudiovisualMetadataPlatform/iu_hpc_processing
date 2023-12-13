@@ -29,10 +29,12 @@ def main():
     batch_limit = int(config['slurm']['max_content_time'])
     
     all_files = []
+
+    logging.info("Getting file list")
     for file in Path(args.srcdir).glob("*"):
-        if not file.is_file():
-            logging.warning(f"Skipping {file!s} because it is not a file")
-            continue        
+        #if not file.is_file():
+        #    logging.warning(f"Skipping {file!s} because it is not a file")
+        #    continue        
         all_files.append(str(file.absolute()))
         
     def ffprobe_done(fut: Future):
@@ -43,10 +45,15 @@ def main():
             logging.info(f"Raw Batch {len(raw_batches)}: {raw_batches[-1]['duration']} seconds of content, {len(raw_batches[-1]['files'])} files.")
             raw_batches.append({'duration': 0, 'files': []})
 
+    limit = 100
+
     ppe = ThreadPoolExecutor()
     for f in all_files:
         fut: Future = ppe.submit(lambda x: (x, FFProbe(x).get_duration()), f)            
         fut.add_done_callback(ffprobe_done)
+        limit -= 1
+        if limit < 0:
+            break
     ppe.shutdown(wait=True)
     logging.info(f"Raw batching finished, {len(raw_batches)} batches sorted, {len(all_files)} files processed.")
 
@@ -93,7 +100,7 @@ def main():
             f"module load apptainer",
             "",
             f"cd {batchpath!s}",
-            f"time apptainer run --nv {thisdir}/hpc_python.sif {thisdir}/mdpi_metadata_generator.py {args.outdir} {' '.join(infiles)}",
+            f"time apptainer run --nv {thisdir}/hpc_python.sif {thisdir}/mdpi_metadata_generator.py --perf {args.outdir}/{batch_name}.perf {args.outdir} {' '.join(infiles)}",
             f"echo $? >> returncode.txt"
         ]
 

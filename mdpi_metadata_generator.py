@@ -199,8 +199,8 @@ def do_audioclassification(file: Path, probe: FFProbe, outdir: Path):
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     encoding='utf-8')
         if p.returncode != 0:
-            logging.error(f"{afile}: Cannot run ffmpeg for audio classification")
-            raise Exception("FFMPEG failed for audioclassification on {afile}")
+            logging.error(f"{afile}: Cannot run ffmpeg for audio classification: {p.stdout}")
+            raise Exception(f"FFMPEG failed for audioclassification on {afile}")
         perf.checkpoint("audioclassification-cvt2wav", afile, probe.get_duration())
         
         BaseOptions = mp.tasks.BaseOptions
