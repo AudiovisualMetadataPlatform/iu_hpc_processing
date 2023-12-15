@@ -48,3 +48,41 @@ To do it in a multi-processing way one can run:
 ls *.mp4 | parallel --bar "ffprobe -loglevel quiet -print_format json -show_format -show_streams {} > {}.probe"
 ```
 
+# Dead space in files
+This was really the whole start of this process and then I got sidetracked.  
+
+```
+ls *.mp4 | parallel --bar "blankdetection.py {} /tmp/{/}.blankdetection.json
+```
+
+Using parallel and sshfs it's possible to spread the load across our servers.
+
+On esquilax (where the source files are):
+```
+cd /tmp
+ln -s /srv/storage/mdpi_research .
+```
+
+On each of the worker nodes (unicorn, jackrabbit, xcode-07, capybara):
+```
+cd /tmp
+mkdir mdpi_research
+sshfs esquilax.dlib.indiana.edu:/srv/storage/mdpi_research /tmp/mdpi_research
+```
+
+For the audio files the dead air is really quick to find but less so for the
+video.  Video takes ~6 CPUs each, so let's not overload the servers by dividing
+their CPUs by 6 when calling the command on esquilax
+
+```
+mkdir -p /home/bdwheele/blankdetection_results/SB-ARCHIVES
+find /tmp/mdpi_research/by_type/SB-ARCHIVES/video -type f | parallel --progress  --retries 3 --joblog /tmp/parallel.log -S 12/: -S 4/unicorn  -S 4/jackrabbit -S 12/xcode-07.mdpi.iu.edu -S 12/capybara   "/home/bdwheele/iu_hpc_processing/blankdetection.py {} /home/bdwheele/blankdetection_results/{/}.blankdetection.json"
+```
+
+but for audio?  Go nuts!
+
+```
+mkdir -p /home/bdwheele/blankdetection_results/SB-ARCHIVES
+find /tmp/mdpi_research/by_type/SB-ARCHIVES/audio  -type f | parallel --progress  --retries 3 --joblog /tmp/parallel.log -S 72/: -S 24/unicorn  -S 24/jackrabbit -S 72/xcode-07.mdpi.iu.edu -S 72/capybara   "/home/bdwheele/iu_hpc_processing/blankdetection.py {} /home/bdwheele/blankdetection_results/{/}.blankdetection.json"
+```
+

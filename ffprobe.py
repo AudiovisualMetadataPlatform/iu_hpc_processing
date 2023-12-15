@@ -6,7 +6,7 @@ import json
 class FFProbe:
     def __init__(self, filename):
         self.filename = filename
-        p = subprocess.run(['ffprobe', '-print_format', 'json', '-show_format', '-show_streams', filename],
+        p = subprocess.run(['ffprobe', '-print_format', 'json', '-show_format', '-show_streams', str(filename)],
                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, encoding='utf-8')
         if p.returncode != 0:
             self.probe = None

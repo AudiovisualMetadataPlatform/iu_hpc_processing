@@ -14,6 +14,7 @@ import tempfile
 
 from ffprobe import FFProbe
 from performance import Performance
+from blankdetection import do_blankdetection
 import whisper
 import torch
 from mediapipe.tasks.python import audio
@@ -21,6 +22,7 @@ from mediapipe.tasks.python.components import containers
 from scipy.io import wavfile
 import mediapipe as mp
 import numpy as np
+from utils import write_outfile
 
 
 def main():
@@ -95,13 +97,7 @@ def main():
     perf.finish()
 
 
-def write_outfile(srcfile: Path, outdir: Path, key: str, data):
-    """Write the output data in json in a reasonable fashion"""
-    try:
-        with open(outdir / f"{srcfile.name}--{key}.json", "w") as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        logging.exception(f"Cannot write to output file: {srcfile}, {outdir}, {key}, {data}")
+
 
 
 def do_whisper(todo: list, outdir: Path, language='en', device='auto', model='large'):    
@@ -151,52 +147,6 @@ def do_whisper(todo: list, outdir: Path, language='en', device='auto', model='la
     return perf
 
 
-def do_blankdetection(file: Path, probe: FFProbe, outdir: Path):
-    "Run blank detection on a file"
-    perf = Performance(None)
-    filters = []
-    for stype in probe.get_stream_types():
-        if stype == 'video':
-            filters.append("[0:v]blackdetect=d=5:pix_th=0.10")
-        elif stype == 'audio':
-            filters.append('[0:a]silencedetect=n=-50dB:d=5')
-
-    afile = str(file.absolute())
-    logging.info(f"{afile}: Detecting blank content")
-    perf.mark('blankdetect-ffmpeg')
-    p = subprocess.run(['ffmpeg', '-i', afile, 
-                        '-filter_complex', ";".join(filters),
-                        '-f', 'null', '-'],
-                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                        encoding='utf-8')
-    if p.returncode != 0:
-        logging.error(f"{afile}: failed to run ffmpeg {p.returncode}: {p.stdout}")
-        raise Exception(f"Failed to run ffmpeg for blank detection on {afile}")
-    perf.checkpoint('blankdetect-ffmpeg', afile, probe.get_duration())
-    
-    res = []
-    perf.mark('blankdetect-parse')
-    linecount = 0
-    for line in p.stdout.splitlines():
-        linecount += 1
-        if 'silence_end' in line:            
-            parts = line.split()
-            duration = float(parts[7])
-            end = float(parts[4])
-            start = end - duration
-            res.append({'type': 'silence',
-                        'start': start,
-                        'end': end })
-        elif 'black_start' in line:
-            parts = line.split()            
-            start = float(parts[3].split(':')[1])
-            end = float(parts[4].split(':')[1])
-            res.append({'type': 'black',
-                        'start': start,
-                        'end': end})
-    perf.checkpoint('blankdetect-parse', len(res), linecount)
-    write_outfile(file, outdir, 'blankdetect', res)
-    return perf
 
 
 def do_audioclassification(file: Path, probe: FFProbe, outdir: Path):
