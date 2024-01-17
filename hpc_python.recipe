@@ -24,7 +24,8 @@ apt install -y \
     python3-requests-file python3-s3transfer python3-scipy python3-toml \
     python3-urllib3 \
     awscli curl imagemagick ffmpeg sox wget \
-    mesa-utils libegl-mesa0 libegl1-mesa libgles2-mesa
+    mesa-utils libegl-mesa0 libegl1-mesa libgles2-mesa \
+    sshfs 
 
 # other python packages...
 pip install --break-system-packages jiwer faster-whisper

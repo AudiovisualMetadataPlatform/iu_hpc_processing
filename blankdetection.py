@@ -36,12 +36,12 @@ def do_blankdetection(file: Path, probe: FFProbe, outdir: Path):
     has_video = False
     for stype in probe.get_stream_types():
         if stype == 'video':
-            filters.append("[0:v]blackdetect=d=5:pix_th=0.10")
+            filters.append("[0:v]blackdetect=d=60:pix_th=0.10")
             has_video = True
         elif stype == 'audio':
-            filters.append('[0:a]silencedetect=n=-50dB:d=5')
+            filters.append('[0:a]silencedetect=n=-60dB:d=60')
             has_audio = True
-    print(filters)
+    #print(filters)
 
     afile = str(file.absolute())
     logging.info(f"{afile}: Detecting blank content")

@@ -1,6 +1,44 @@
 # iu_hpc_processing
 
-A system to manage batch jobs in a semi-automated fashion.
+A system to manage batch jobs in a semi-automated fashion.  Unfortunately, the 
+way that BR200 is set up, there's really no way to do things /on/ big red for
+automation.  Everything is explicitly set up to limit to interactive use only.
+Likewise, it's assumed that you'll use something like globus to do bulk file
+transfers from your workstation (or from SDA) to have the data to process.
+Additionally, you sort of have to know how long your job is expected to last so
+it won't get cut short.  Also, time the amount of cpu (and time) that can be 
+used on the login nodes is limited.
+
+All of these things work against us for the way we need to use this, so we have 
+to be...tricksy.
+
+There are a lot of moving parts so the HPC cluster has to be abstracted out so 
+we have guaranteed semantics for how jobs are created/queried/run/etc. 
+
+Clients connect to the hpc_service by ssh'ing into br200 and running the 
+`hpc_service.py` command with the appropriate arguments. 
+
+
+
+
+
+
+
+
+
+
+This is going to focus on whisper
+
+
+
+
+
+
+
+
+
+
+
 
 ## hpc_python.sif
 This is a self-contained apptainer file which is a python 3.11 environment and
@@ -8,6 +46,15 @@ includes things like ffmpeg and other tools.
 
 ## hpc_batch.ini
 Configuration file for all things HPC batchy.
+
+
+
+
+
+
+
+
+
 
 ## process_batches
 Every minute(?) cron will start process_batches.cron which will exit if 

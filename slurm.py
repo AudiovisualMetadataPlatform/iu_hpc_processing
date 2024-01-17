@@ -3,11 +3,8 @@ import subprocess
 import json
 
 class Slurm:
-    def __init__(self, account: str, email: str = None):
+    def __init__(self, account: str):
         self.account = account
-        self.email = email
-        self.info_cache = None
-
 
     def get_job_info(self, jobid=None, jobname=None, active=True):
         """Get job information for all jobs with this account, filtered by
