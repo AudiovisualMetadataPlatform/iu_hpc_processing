@@ -1,4 +1,4 @@
-#!/usr/bin/env hpc_python.sif
+#!/usr/bin/env python3
 # client and server bits for the HPC Service
 import argparse
 import paramiko
