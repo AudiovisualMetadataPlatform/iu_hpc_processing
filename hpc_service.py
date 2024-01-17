@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # client and server bits for the HPC Service
 import argparse
-import paramiko
 import logging
 import json
 import getpass
