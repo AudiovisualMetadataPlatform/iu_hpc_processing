@@ -83,7 +83,7 @@ def client_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", default=False, action="store_true", help="Turn on debugging")
     parser.add_argument("--hpcuser", type=str, default=None, help="User on HPC")
-    parser.add_argument("--hcphost", type=str, default="bigred200.uits.iu.edu", help="HPC Host")
+    parser.add_argument("--hpchost", type=str, default="bigred200.uits.iu.edu", help="HPC Host")
     parser.add_argument("--hpcscript", type=str, default="iu_hpc_processing/hpc_service.py")
     subparsers = parser.add_subparsers(help="Command", dest='command')
     sp = subparsers.add_parser('submit', help="Submit a new job")
@@ -92,7 +92,6 @@ def client_main():
     sp = subparsers.add_parser('list', help='List all jobs')
     sp = subparsers.add_parser('cancel', help="Cancel job")
     sp.add_argument("id", help="Job ID")    
-    parser.add_argument()
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s [%(process)d:%(filename)s:%(lineno)d] [%(levelname)s] %(message)s")
