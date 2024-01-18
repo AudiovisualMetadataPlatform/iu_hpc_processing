@@ -7,6 +7,8 @@ import ffprobe
 import json
 import argparse
 import logging
+import sys
+import select
 
 
 class HPCClient:
@@ -25,8 +27,25 @@ class HPCClient:
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
         self.client.connect(self.hpchost, username=self.connectuser)
 
+        # things from the last remote command run...
+        self.stdout = ""
+        self.stderr = ""
 
-    def submit(self, function: str, params: list[dict], files: list[str]):
+
+
+    def _run_remote(self, command, stdin_data=None):
+        (stdin, stdout, stderr) = self.client.exec_command(command)
+        if stdin_data:
+            logging.debug(f"Writing data to remote command: {stdin_data}")
+            stdin.write(stdin_data if isinstance(stdin_data, str) else json.dumps(stdin_data))
+            stdin.close()
+        logging.debug("Waiting for output")
+        self.stdout = "".join(stdout.readlines())
+        self.stderr = "".join(stderr.readlines())
+        print(self.stderr, file=sys.stderr)   
+        
+
+    def submit(self, function: str, params: dict, tasklist: list[dict], files: list[str]):
         """Build a submission data packet and send it to HPC for later work.  Return the job ids"""
         # run ffprobe on all of the files.
         probes = {}
@@ -38,19 +57,16 @@ class HPCClient:
         sub = {
             'function': function,
             'params': params,
+            'tasklist': tasklist,
             'probes': probes,
             'email': self.email,
             'scphost': self.scphost,
             'scpuser': self.scpuser,
         }
-
-        (stdin, stdout, stderr) = self.client.exec_command(f"{self.hpcscript} submit")
-        stdin.write(json.dumps(sub))
-        stdin.close()
-        data = stdout.readlines()
-        if not data:
-            raise Exception(f"Cannot submit.  Stderr: {stderr.readlines()}")        
-        return json.loads("\n".join(data))        
+        self._run_remote(f"{self.hpcscript} submit", sub)
+        if not self.stdout:
+            raise Exception(f"Cannot submit.  Stderr: {self.stderr}")        
+        return json.loads(self.stdout)        
 
 
     def check(self, id):

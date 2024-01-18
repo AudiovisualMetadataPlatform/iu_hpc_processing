@@ -12,6 +12,15 @@ class FFProbe:
             self.probe = None
         else:            
             self.probe = json.loads(p.stdout)
+            # fixup the duration so we always know where it is.
+            if 'duration' not in self.probe['format']:  
+                for s in self.probe['streams']:              
+                    if 'duration' in s:
+                        self.probe['format']['duration'] = float(s['duration'])
+                        break
+                else:
+                    self.probe['format']['duration'] = 0
+            self.probe['_stream_types'] = self.get_stream_types()
 
 
     def probed_successfully(self):
@@ -24,12 +33,7 @@ class FFProbe:
         if not self.probe:
             return 0
         
-        if 'duration' in self.probe['format']:
-            return float(self.probe['format']['duration'])
-        elif 'duration' in self.probe['streams'][0]:
-            return float(self.probe['streams'][0]['duration'])
-        else:
-            return 0
+        return self.probe['format']['duration']
 
 
     def get_stream_types(self):
