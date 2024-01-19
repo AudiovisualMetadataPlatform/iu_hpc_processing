@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3
 # client and server bits for the HPC Service
 import argparse
 import logging
@@ -71,10 +71,12 @@ def main():
                     'params': request['params'],
                     'batches': j
                 }
-                scriptbody = f"time apptainer {sys.path[0]}/hpc_python.sif {sys.path[0]}/hpc_whisper_server <<EOF\n"
+                p = sys.path[0].replace("/geode2/", "/N/")
+                
+                scriptbody = f"time apptainer run --nv {p}/hpc_python.sif {p}/hpc_whisper_server.py <<EOF\n"
                 scriptbody += json.dumps(data, indent=4) + "\n"
                 scriptbody += "EOF\n"
-                jobids.append(slurm.submit(scriptbody, email, gpu=1, job_time=int(size_limit * 1.5)))
+                jobids.append(slurm.submit(scriptbody, email, gpu=1, job_time=int(size_limit * 1.5/60)))
 
             print(json.dumps(jobids))
 
