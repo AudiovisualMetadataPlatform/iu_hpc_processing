@@ -14,6 +14,7 @@ def main():
     parser.add_argument('infile', nargs='+', type=Path, help="Input files")
     parser.add_argument('outdir', type=Path, help="Output directory")
     parser.add_argument('--model', default='medium', choices=['tiny', 'base', 'small', 'medium', 'large'], help="Whisper model")
+    parser.add_argument("--device", default='auto', choices=['auto', 'cpu', 'cuda'], help="Computation model")
     parser.add_argument("--hpcuser", type=str, default=None, help="User on HPC")
     parser.add_argument("--hpchost", type=str, default="bigred200.uits.iu.edu", help="HPC Host")
     parser.add_argument("--hpcscript", type=str, default="iu_hpc_processing/hpc_service.py")
@@ -37,7 +38,7 @@ def main():
 
     hpc = HPCClient(connectuser=args.hpcuser, hpchost=args.hpchost, hpcscript=args.hpcscript,
                     scphost=args.scphost, scpuser=args.scpuser)
-    subres = hpc.submit('whisper', {'model': args.model}, tasklist, files)
+    subres = hpc.submit('whisper', {'model': args.model, 'device': args.device}, tasklist, files)
     print(json.dumps(subres, indent=4))
     jobids = set()
     logging.info(f"These jobs were submitted: {jobids}")

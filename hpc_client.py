@@ -84,7 +84,7 @@ class HPCClient:
         self._run_remote(f"{self.hpcscript} list")        
         if not self.stdout:
             raise Exception(f"Cannot get list.  Stderr: {self.stderr}")        
-        logging.info(self.stdout)
+        #logging.info(self.stdout)
         return json.loads(self.stdout)
         
 
@@ -107,6 +107,7 @@ def main():
     sp = subparsers.add_parser('check', help="Check job status")
     sp.add_argument("id", help="Job ID")
     sp = subparsers.add_parser('list', help='List all jobs')
+    sp.add_argument("--long", '-l', default=False, action="store_true", help="Long listing")
     sp = subparsers.add_parser('cancel', help="Cancel job")
     sp.add_argument("id", help="Job ID")    
     args = parser.parse_args()
@@ -143,8 +144,11 @@ def main():
             for d in data:
                 data[d].pop(f, None)
 
+        if args.long:
+            print(json.dumps(data, indent=4))
+        else:
+            print(json.dumps(list(data.keys())))
 
-        print(json.dumps(data, indent=4))
     elif args.command == "cancel":
         print(hpc.cancel(args.id))
 
