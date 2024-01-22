@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import time
 import os
+import logging
 
 class Slurm:
     def __init__(self, account: str, batchdir: str):
@@ -31,6 +32,7 @@ class Slurm:
             f'#SBATCH -t {job_time}',
             f"#SBATCH --mail-type=ALL",
             f"#SBATCH --mail-user={email}",
+            f"#SBATCH --mem 128G",
         ]
 
         # if a GPU is requested, add the GPU parameters.
@@ -69,7 +71,12 @@ class Slurm:
         if True:
             p = subprocess.run(['sbatch', str((job_dir / "script.sh").absolute())],
                                 stdout=subprocess.PIPE, encoding='utf-8')
-            return p.stdout.strip().split()[-1]
+            output = p.stdout.strip()
+            #logging.info(output)
+            jobid = int(p.stdout.strip().split()[-1])
+            with open(job_dir / "slurm_job.txt", "w") as f:
+                f.write(f"{jobid}\n")
+            return jobid
         else:
             return job_dir.name
 
@@ -87,15 +94,41 @@ class Slurm:
         for j in raw['jobs']:
             if j['account'] == self.account:
                 if j['job_state'] == 'COMPLETED' and active:
-                    continue                
-                if jobid is not None and jobid != j['job_id']:
+                    continue              
+                if jobid is not None and int(jobid) != j['job_id']:
                     continue
                 if jobname is not None and jobname != j['name']:
                     continue                
                 res[j['job_id']] = j
         return res
 
-    
+
+    def get_job_details(self, jobid):
+        """Get job details"""
+        data = self.get_job_info(jobid)
+        if jobid in data:
+            pass
+
+        p = subprocess.run(['squeue', '-A', self.account, '--json'],
+                           stdout=subprocess.PIPE, encoding='utf-8')        
+        if p.returncode != 0:
+            return {}
+        
+        raw = json.loads(p.stdout)
+        res = {}
+        for j in raw['jobs']:
+            if j['account'] == self.account:
+                if j['job_state'] == 'COMPLETED' and active:
+                    continue              
+                if jobid is not None and int(jobid) != j['job_id']:
+                    continue
+                if jobname is not None and jobname != j['name']:
+                    continue                
+                res[j['job_id']] = j
+        return res
+
+
+
     def cancel_job(self, jobid: str):
         """Cancel a job"""
         p = subprocess.run(['scancel', '-A', self.account, jobid],
