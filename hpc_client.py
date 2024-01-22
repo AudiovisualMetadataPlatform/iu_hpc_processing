@@ -70,27 +70,30 @@ class HPCClient:
 
 
     def check(self, id):
-        (stdin, stdout, stderr) = self.client.exec_command(f"{self.hpcscript} check {id}")
-        data = stdout.readlines()
-        if not data:
-            raise Exception(f"Cannot check.  Stderr: {stderr.readlines()}")        
-        return json.loads("\n".join(data))
+        self._run_remote(f"{self.hpcscript} check {id}")        
+        if not self.stdout:
+            raise Exception(f"Cannot check.  Stderr: {self.stderr}")        
+        data = json.loads(self.stdout)
+        if id not in data:
+            return None
+        return data[id]['job_state']
+
 
 
     def list(self):
-        (stdin, stdout, stderr) = self.client.exec_command(f"{self.hpcscript} list")
-        data = stdout.readlines()
-        if not data:
-            raise Exception(f"Cannot get list.  Stderr: {stderr.readlines()}")        
-        return json.loads("\n".join(data))
-    
+        self._run_remote(f"{self.hpcscript} list")        
+        if not self.stdout:
+            raise Exception(f"Cannot get list.  Stderr: {self.stderr}")        
+        logging.info(self.stdout)
+        return json.loads(self.stdout)
+        
+
 
     def cancel(self, id):
-        (stdin, stdout, stderr) = self.client.exec_command(f"{self.hpcscript} cancel {id}")
-        data = stdout.readlines()
-        if not data:
-            raise Exception(f"Cannot cancel.  Stderr: {stderr.readlines()}")        
-        return "".join(data)
+        self._run_remote(f"{self.hpcscript} cancel {id}")        
+        if not self.stdout:
+            raise Exception(f"Cannot cancel.  Stderr: {self.stderr}")        
+        return "".join(self.stdout)
 
 
 def main():
@@ -117,7 +120,31 @@ def main():
     elif args.command == "check":
         print(hpc.check(args.id))
     elif args.command == "list":
-        print(hpc.list())
+        data = hpc.list()
+        # clean up the data
+        for f in ('accrue_time', 'admin_comment', 'array_job_id', 'array_task_id',
+                  'array_max_tasks', 'array_task_string', 'association_id', 'batch_features',
+                  'batch_flag', 'flags', 'burst_buffer', 'burst_buffer_state', 
+                  'cluster', 'cluster_features', 'container', 'contiguous', 'core_spec',
+                  'thread_spec', 'cores_per_socket', 'billable_tres', 'cpus_per_task',
+                  'cpu_frequency_minimum', 'cpu_frequency_maximum', 'cpu_frequency_governor',
+                  'cpus_per_tres', 'deadline', 'delay_boot', 'dependency', 'eligible_time',
+                  'excluded_nodes', 'features', 'federation_origin', 'federation_siblings_active',
+                  'federation_siblings_viable', 'gres_detail', 'last_sched_evaulation',
+                  'licenses', 'max_cpus', 'max_nodes', 'mcs_label', 'memory_per_tres',
+                  'nice', 'tasks_per_core', 'tasks_per_node', 'tasks_per_socket', 'tasks_per_board',
+                  'het_job_id', 'het_job_id_set', 'het_job_offset', 'prefer', 'memory_per_node',
+                  'memory_per_cpu', 'minimum_cpus_per_node', 'minimum_tmp_disk_per_node',
+                  'preempt_time', 'pre_sus_time', 'profile', 'reboot', 'required_nodes',
+                  'resize_time', 'resize_cnt', 'resv_name', 'shared', 'show_flags',
+                  'sockets_per_board', 'sockets_per_node', 'suspend_time', 'time_minimum',
+                  'threads_per_core', 'tres_bind', 'tres_freq', 'tres_per_job', 'tres_per_node',
+                  'tres_per_socket', 'tres_per_task', 'wckey'):
+            for d in data:
+                data[d].pop(f, None)
+
+
+        print(json.dumps(data, indent=4))
     elif args.command == "cancel":
         print(hpc.cancel(args.id))
 
