@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 from utils import write_outfile
 import os
+import time
 
 def main():
     parser = argparse.ArgumentParser()
@@ -105,11 +106,12 @@ def do_whisper(todo: list, language='auto', device='auto', model='large', scphos
                 language = max(probs, key=probs.get)                
             
             logging.info(f"{spec['infile']}: Starting {model} transcription")            
+            t = time.time()
             res = whisper.transcribe(model_data, audio, word_timestamps=True, language=language, verbose=None,
                                     initial_prompt="Hello.")            
             with open(f"transcript-{pid}.json", "w") as f:
                 json.dump(res, f, indent=4)            
-            logging.info(f"{spec['infile']}: Transcription finished")    
+            logging.info(f"{spec['infile']}: {model} Transcription finished, {spec['duration']} seconds of content in {time.time() - t} seconds")    
     
             #sftp.put("transcript.json", spec['outfile'])
             with sftp.open(spec['outfile'], 'w') as o:

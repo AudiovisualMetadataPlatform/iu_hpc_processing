@@ -31,7 +31,7 @@ def main():
     config = configparser.ConfigParser()
     config.read(args.config)
     
-    slurm = Slurm(config['slurm']['account'], config['files']['batchdir'])
+    slurm = Slurm(config['slurm']['account'], config['slurm']['batchdir'])
 
     if args.command == "submit":
         request = json.loads(sys.stdin.read())
@@ -40,7 +40,20 @@ def main():
             email = config['slurm']['email']
 
         if request['function'] == 'whisper':
+            
+            
+            
+            
+            
             # group requests into batches with a maximum duration
+            max_content_time = config['slurm']['max_content_time']
+            if request['params']['device'] == 'cuda':
+                max_content_time *= 1.5
+            else:
+                max_content_time /= 9
+
+
+
             batches = [[]]
             batch_sizes = [0.0]
             size_limit = int(config['slurm']['max_content_time'])
@@ -53,6 +66,7 @@ def main():
                     continue
 
                 d = float(request['probes'][p['infile']]['format']['duration'])
+                p['duration'] = d
                 if batch_sizes[-1] + d > size_limit:
                     # start a new one
                     batches.append([])
@@ -76,7 +90,10 @@ def main():
                 scriptbody = f"time apptainer run --nv {p}/hpc_python.sif {p}/hpc_whisper_server.py <<EOF\n"
                 scriptbody += json.dumps(data, indent=4) + "\n"
                 scriptbody += "EOF\n"
-                jobids.append(slurm.submit(scriptbody, email, gpu=1, job_time=int(size_limit * 1.5/60)))
+                if request['params']['device'] == 'cpu':
+                    jobids.append(slurm.submit(scriptbody, email, gpu=0, job_time=int(size_limit * 1.5/60)))
+                else:                
+                    jobids.append(slurm.submit(scriptbody, email, gpu=1, job_time=int(size_limit * 1.5/60)))
 
             print(json.dumps(jobids))
 

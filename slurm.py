@@ -32,6 +32,7 @@ class Slurm:
             f'#SBATCH -t {job_time}',
             f"#SBATCH --mail-type=ALL",
             f"#SBATCH --mail-user={email}",
+            f"#SBATCH --mem 128G",
         ]
 
         # if a GPU is requested, add the GPU parameters.
@@ -71,8 +72,11 @@ class Slurm:
             p = subprocess.run(['sbatch', str((job_dir / "script.sh").absolute())],
                                 stdout=subprocess.PIPE, encoding='utf-8')
             output = p.stdout.strip()
-            logging.info(output)
-            return int(p.stdout.strip().split()[-1])
+            #logging.info(output)
+            jobid = int(p.stdout.strip().split()[-1])
+            with open(job_dir / "slurm_job.txt", "w") as f:
+                f.write(f"{jobid}\n")
+            return jobid
         else:
             return job_dir.name
 
