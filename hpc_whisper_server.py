@@ -4,6 +4,7 @@ import json
 import paramiko
 import getpass
 import whisper
+from faster_whisper import WhisperModel
 import torch
 import logging
 from concurrent.futures import Future, ProcessPoolExecutor
@@ -20,6 +21,11 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s [%(process)d:%(filename)s:%(lineno)d] [%(levelname)s] %(message)s")
+
+    # determine our queue time based on when the script was created and the current time.
+    queue_time = time.time() - Path(__file__).stat().st_mtime
+    logging.info(f"Possible queue time: {queue_time} seconds")
+
 
 
     # all of our job parameters come in via a json on stdin.
@@ -75,14 +81,12 @@ def do_whisper(todo: list, language='auto', device='auto', model='large', scphos
                 with sftp.open(spec['infile'], "rb") as i:
                     while True:
                         data = i.read()
-                        logging.info(f"Read {len(data)} bytes")
+                        #logging.info(f"Read {len(data)} bytes")
                         if len(data) != 0:
                             o.write(data)
                         else:
                             break
             
-            #sftp.get(spec['infile'], "media.mp4")
-
             logging.info(f"Normalizing audio")
             p = subprocess.run(['ffmpeg', '-i', f'media-{pid}.mp4', 
                                 '-r', '44100', '-ac', '1', '-c:a', 'pcm_s16le', 
@@ -105,13 +109,14 @@ def do_whisper(todo: list, language='auto', device='auto', model='large', scphos
                 logging.info(f"{spec['infile']}: Language detection: {probs}")
                 language = max(probs, key=probs.get)                
             
-            logging.info(f"{spec['infile']}: Starting {model} transcription")            
+            logging.info(f"{spec['infile']}: Starting {model} transcription, duration {spec['duration']}")            
             t = time.time()
             res = whisper.transcribe(model_data, audio, word_timestamps=True, language=language, verbose=None,
                                     initial_prompt="Hello.")            
             with open(f"transcript-{pid}.json", "w") as f:
                 json.dump(res, f, indent=4)            
-            logging.info(f"{spec['infile']}: {model} Transcription finished, {spec['duration']} seconds of content in {time.time() - t} seconds")    
+            runtime = time.time() - t
+            logging.info(f"{spec['infile']}: {model} Transcription finished, {spec['duration']} seconds of content in {runtime} seconds, content ratio {spec['duration'] / runtime}")    
     
             #sftp.put("transcript.json", spec['outfile'])
             with sftp.open(spec['outfile'], 'w') as o:
@@ -134,7 +139,68 @@ def do_whisper(todo: list, language='auto', device='auto', model='large', scphos
             for f in (f'media-{pid}.mp4', f'audio-{pid}.wav', f'transcript-{pid}.json'):
                 Path(f).unlink(missing_ok=True)
 
+def whisper_load_model(model, device):
+    return whisper.load_model(model, device=device, download_root="/var/lib/whisper")
 
+
+def whisper_impl(pid, spec, model_data, language='auto', device='auto', model='large'):
+    audio = whisper.load_audio(f"audio-{pid}.wav")
+
+    if language == "auto":            
+        logging.info(f"{spec['infile']}: Detecting language...")              
+        # Just pull the first few languages that are in tokeniser.py
+        probable_languages = ('en', 'zh', 'de', 'es', 'ru', 'ko', 'fr', 'ja')                
+        detect_audio = whisper.pad_or_trim(audio)
+        mel = whisper.log_mel_spectrogram(detect_audio).to(device)
+        _, probs = model_data.detect_language(mel)            
+        probs = {k: v for k, v in probs.items() if k in probable_languages}
+        logging.info(f"{spec['infile']}: Language detection: {probs}")
+        language = max(probs, key=probs.get)                
+    
+    logging.info(f"{spec['infile']}: Starting {model} transcription, duration {spec['duration']}")            
+    t = time.time()
+    res = whisper.transcribe(model_data, audio, word_timestamps=True, language=language, verbose=None,
+                            initial_prompt="Hello.")            
+    with open(f"transcript-{pid}.json", "w") as f:
+        json.dump(res, f, indent=4)            
+    runtime = time.time() - t
+    logging.info(f"{spec['infile']}: {model} Transcription finished, {spec['duration']} seconds of content in {runtime} seconds, content ratio {spec['duration'] / runtime}")    
+    
+
+def faster_whisper_load_model(model, device):
+    if device == 'cuda':
+        ctype = 'float16'
+        threads = 4
+    else:
+        ctype = 'float32'
+        threads = 48
+    # at some point I need to pre-download the models.  download_root can be used to set the model root.
+    return WhisperModel(model, device=device, compute_type=ctype, cpu_threads=threads, download_dir="/var/lib/faster_whisper")
+
+
+def faster_whisper_impl(pid, spec, model_data, language='auto', device='auto', model='large'):    
+    segiter, info = model_data.transcribe(f"audio-{pid}.wav", word_timestamps=True, language=language, vad_filter=True)
+    logging.info(f"Using language {info.language}")
+    res = {
+        'faster_whisper_info': info,
+        'language': info.language,
+        'text': '',
+        'segments': []
+    }
+    logging.info(f"{spec['infile']}: Starting {model} transcription, duration {spec['duration']}")            
+    t = time.time()    
+    for s in segiter:
+        seg = dict(s)
+        seg['words'] = []
+        res['text'] += s.text
+        for w in s.words:
+            seg['words'].append(dict(w))
+        res['segments'].append(seg)
+
+    with open(f"transcript-{pid}.json", "w") as f:
+        json.dump(res, f, indent=4)            
+    runtime = time.time() - t
+    logging.info(f"{spec['infile']}: {model} Transcription finished, {spec['duration']} seconds of content in {runtime} seconds, content ratio {spec['duration'] / runtime}")    
 
 
 if __name__ == "__main__":
