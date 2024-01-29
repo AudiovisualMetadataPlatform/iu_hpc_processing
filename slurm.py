@@ -13,7 +13,7 @@ class Slurm:
         self.batchdir.mkdir(exist_ok=True, parents=True)
 
 
-    def submit(self, scriptbody, email, gpu=0, cpu=1, job_time="1:00", tag=None):
+    def submit(self, scriptbody, email, gpu=0, cpu=1, ram=16, job_time="1:00", tag=None):
         """Submit a new batch job, returning the id"""
         # create a batch name, directory, and move there.
         if not tag:
@@ -36,7 +36,7 @@ class Slurm:
             f"#SBATCH --mail-type=ALL",
             f"#SBATCH --mail-user={email}",
             f"#SBATCH --mincpus={cpu}",
-            f"#SBATCH --mem 64G",
+            f"#SBATCH --mem {ram}G",
         ]
 
         # if a GPU is requested, add the GPU parameters.

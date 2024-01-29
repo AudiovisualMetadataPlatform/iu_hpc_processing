@@ -43,24 +43,28 @@ def main():
         if request['function'] == 'whisper':
             # load the correct configuration and compute our limits.
             sconfig = config['slurm']            
-            params = request['params']
-            wconfig = config[f"whisper.{params['model']}"]
+            params = request['params']            
+            wconfig = config[f"{params['engine']}.{params['model']}"]
             if params['device'] == "cuda":
-                concurrent_batches = floor(int(sconfig['gpu_vram']) / int((wconfig['model_vram']) + 1))
+                concurrent_batches = floor(int(sconfig['gpu_vram']) / int(wconfig['model_vram'])) + 1
                 processing_factor = float(wconfig['gpu_factor'])
+                host_cpus =  4
+                host_ram = 64
+                gpus = 1
             else:
                 concurrent_batches = int(wconfig['cpu_batches'])
                 processing_factor = float(wconfig['cpu_factor'])
+                host_cpus = concurrent_batches * int(wconfig['cpu_count'])
+                host_ram = concurrent_batches * int(wconfig['cpu_model_ram'])
+                gpus = 0
 
             target_slot_time = int(sconfig['max_slot_target'])
             max_content_time = target_slot_time * processing_factor
             
-            logging.info(f"With model {params['model']} on device {params['device']}, there are {concurrent_batches} concurrent batches each with a max content time of {max_content_time}")
-
+            logging.info(f"({params['engine']}.{params['model']}) on {params['device']}, there are {concurrent_batches} concurrent batches each with a max content time of {max_content_time} requiring {host_cpus} CPUS, {host_ram} RAM, and {gpus} GPUS")
 
             batches = [[]]
             batch_sizes = [0.0]
-            #size_limit = int(config['slurm']['max_content_time'])
             for p in request['tasklist']:
                 if p['infile'] not in request['probes']:
                     logging.warning(f"Input file {p['infile']} has not been probed.  Skipping")
@@ -86,7 +90,7 @@ def main():
                 data = {
                     'scphost': request['scphost'],
                     'scpuser': request['scpuser'],
-                    'params': request['params'],
+                    'params': params,
                     'batches': j
                 }
                 p = sys.path[0].replace("/geode2/", "/N/")
@@ -94,12 +98,11 @@ def main():
                 scriptbody = f"time apptainer run --nv {p}/hpc_python.sif {p}/hpc_whisper_server.py <<EOF\n"
                 scriptbody += json.dumps(data, indent=4) + "\n"
                 scriptbody += "EOF\n"
-                job_slot_time = int(target_slot_time * 1.5/60)
-                if request['params']['device'] == 'cpu':
-                    cpus = min([int(6 * concurrent_batches), int(sconfig['cpu_threads'])])
-                    jobids.append(slurm.submit(scriptbody, email, gpu=0, cpu=cpus, job_time=job_slot_time, tag="whisper"))
-                else:                
-                    jobids.append(slurm.submit(scriptbody, email, gpu=1, cpu=min([concurrent_batches, int(sconfig['gpu_threads'])]), job_time=job_slot_time, tag="whisper"))
+                job_slot_time = int(target_slot_time * 1.5 / 60)
+                host_cpus = min([int(sconfig['cpu_threads']), host_cpus])
+                jobids.append(slurm.submit(scriptbody, email, gpu=gpus, cpu=host_cpus, job_time=job_slot_time, ram=host_ram, tag=params['engine']))
+        
+
 
             print(json.dumps(jobids))
 
