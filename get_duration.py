@@ -33,7 +33,7 @@ def main():
             fut = ppe.submit(get_duration, f)
             fut.add_done_callback(probe_done)
     ppe.shutdown(wait=True)
-    total_duration = sum(durations)
+    total_duration = sum([float(x) for x in durations])
 
     seconds = total_duration
     hours = int(seconds / 3600)

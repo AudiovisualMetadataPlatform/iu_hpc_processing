@@ -30,6 +30,16 @@ apt install -y \
 # other python packages...
 pip install --break-system-packages jiwer faster-whisper
 
+mkdir -p /var/lib/faster_whisper
+for m in tiny base small medium large large-v2 large-v3; do 
+    echo faster_whisper $m
+    python3 <<EOF
+from faster_whisper import WhisperModel
+WhisperModel('$m', download_root='/var/lib/faster_whisper', device='cpu')
+EOF
+done
+
+
 
 # install nvidia stuff
 here=`pwd`
@@ -37,7 +47,7 @@ cd /root
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
 dpkg -i cuda-keyring_1.1-1_all.deb
 apt update -y
-apt install -y cuda
+apt install -y cuda libcudnn8 libcudnn8-dev
 rm cuda-keyring_1.1-1_all.deb
 cd $here
 

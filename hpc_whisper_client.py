@@ -13,8 +13,11 @@ def main():
     parser.add_argument('--debug', default=False, action="store_true", help="Turn on debugging")
     parser.add_argument('infile', nargs='+', type=Path, help="Input files")
     parser.add_argument('outdir', type=Path, help="Output directory")
+    parser.add_argument("--engine", choices=['whisper', 'faster_whisper'], default='whisper', help="Use whisper or faster_whisper")
     parser.add_argument('--model', default='medium', choices=['tiny', 'base', 'small', 'medium', 'large'], help="Whisper model")
-    parser.add_argument("--device", default='auto', choices=['auto', 'cpu', 'cuda'], help="Computation model")
+    parser.add_argument("--device", default='auto', choices=['cpu', 'cuda'], help="Computation device")
+    parser.add_argument("--vad", default=False, action="store_true", help="Use VAD with faster_whisper")
+    parser.add_argument("--language", type=str, default="en", help="Language")
     parser.add_argument("--hpcuser", type=str, default=None, help="User on HPC")
     parser.add_argument("--hpchost", type=str, default="bigred200.uits.iu.edu", help="HPC Host")
     parser.add_argument("--hpcscript", type=str, default="iu_hpc_processing/hpc_service.py")
@@ -38,7 +41,12 @@ def main():
 
     hpc = HPCClient(connectuser=args.hpcuser, hpchost=args.hpchost, hpcscript=args.hpcscript,
                     scphost=args.scphost, scpuser=args.scpuser)
-    subres = hpc.submit('whisper', {'model': args.model, 'device': args.device}, tasklist, files)
+    subres = hpc.submit('whisper', {'engine': args.engine,
+                                    'model': args.model, 
+                                    'language': args.language,
+                                    'device': args.device,
+                                    'vad': args.vad}, 
+                                    tasklist, files)
     print(json.dumps(subres, indent=4))
     jobids = set()
     logging.info(f"These jobs were submitted: {jobids}")
