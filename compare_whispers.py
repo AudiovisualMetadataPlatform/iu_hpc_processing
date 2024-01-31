@@ -5,10 +5,14 @@ import jiwer
 from pathlib import Path
 import logging
 import json
+import re
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", default=False, action="store_true", help="Turn on debugging")
+    parser.add_argument("--nopunc", default=False, action="store_true", help="Remove punctuation")
+    parser.add_argument("--nocase", default=False, action="store_true", help="Case-insensitive")
+    parser.add_argument("--differences", default=False, action="store_true", help="Only show edits where there's a difference")
     parser.add_argument('base', type=Path, help='Base whisper')
     parser.add_argument('comp', type=Path, help="Thing to compare to base")
     parser.add_argument('output', type=Path, help='Output directory')
@@ -49,8 +53,23 @@ def main():
         with open(c) as f:
             cdata = json.load(f)
         
+        if args.nopunc:
+            # spaceless punctuation
+            bdata['text'] = re.sub(r"[_\-']+", '', bdata['text'])
+            cdata['text'] = re.sub(r"[_\-']+", '', cdata['text'])
+
+            # spaceful punctuation
+            bdata['text'] = re.sub(r"[!@#$%^&*()+=\[\]{}\\|;:\",./<>?]+", ' ', bdata['text'])
+            cdata['text'] = re.sub(r"[!@#$%^&*()+=\[\]{}\\|;:\",./<>?]+", ' ', cdata['text'])
+            
+        if args.nocase:
+            bdata['text'] = bdata['text'].lower()
+            cdata['text'] = cdata['text'].lower()
+            
+
+
         o = jiwer.process_words(bdata['text'], cdata['text'])
-        v, stats = generate_visualization(o)
+        v, stats = generate_visualization(o, differences=args.differences)
 
         report = []
 
@@ -119,8 +138,8 @@ def pad(word, pad_len):
         word += " "
     return word
 
-def generate_visualization(output: jiwer.WordOutput, length=75):
-    results = [{'ref': '', 'hyp': '', 'chg': ''}]
+def generate_visualization(output: jiwer.WordOutput, length=75, differences=False):
+    results = [{'ref': '', 'hyp': '', 'chg': '', 'dif': 0}]
     stats = {'hit': 0, 'sub': 0, 'del': 0, 'ins': 0}
     for idx, (gt, hp, chunks) in enumerate(zip(output.references, output.hypotheses, output.alignments)):
         #print(idx, gt, hp, chunks)
@@ -133,7 +152,7 @@ def generate_visualization(output: jiwer.WordOutput, length=75):
                     word_len = len(gt[i + chunk.ref_start_idx]) 
                     if word_len + len(results[-1]['ref']) + 1> length:
                         # too long. create a new result
-                        results.append({'ref': '', 'hyp': '', 'chg': ''})
+                        results.append({'ref': '', 'hyp': '', 'chg': '', 'dif': 0})
             
                     results[-1]['ref'] += gt[i + chunk.ref_start_idx] + " "
                     results[-1]['hyp'] += hp[i + chunk.hyp_start_idx] + " "
@@ -145,11 +164,12 @@ def generate_visualization(output: jiwer.WordOutput, length=75):
                     word_len = len(hp[i + chunk.hyp_start_idx])
                     if word_len + len(results[-1]['ref']) + 1> length:
                         # too long. create a new result
-                        results.append({'ref': '', 'hyp': '', 'chg': ''})
+                        results.append({'ref': '', 'hyp': '', 'chg': '', 'dif': 0})
             
                     results[-1]['ref'] += ('*' * word_len) + " "
                     results[-1]['hyp'] += hp[i + chunk.hyp_start_idx] + " "
                     results[-1]['chg'] += ('I' * word_len) + " "
+                    results[-1]['dif'] += 1
             elif chunk.type == 'delete':
                 # ref has an additional word that's not in hyp.                
                 for i in range(chunk.ref_end_idx - chunk.ref_start_idx): 
@@ -157,11 +177,12 @@ def generate_visualization(output: jiwer.WordOutput, length=75):
                     word_len = len(gt[i + chunk.ref_start_idx])
                     if word_len + len(results[-1]['ref']) + 1> length:
                         # too long. create a new result
-                        results.append({'ref': '', 'hyp': '', 'chg': ''})
+                        results.append({'ref': '', 'hyp': '', 'chg': '', 'dif': 0})
             
                     results[-1]['ref'] += gt[i + chunk.ref_start_idx] + " "
                     results[-1]['hyp'] += ('*' * word_len) + " "                    
                     results[-1]['chg'] += ('D' * word_len) + " "
+                    results[-1]['dif'] += 1
             elif chunk.type == 'substitute':
                 # ref and hyp have different words (but the same number)                
                 for i in range(chunk.ref_end_idx - chunk.ref_start_idx):
@@ -170,15 +191,19 @@ def generate_visualization(output: jiwer.WordOutput, length=75):
                                     len(hp[i + chunk.hyp_start_idx])])
                     if word_len + len(results[-1]['ref']) + 1> length:
                         # too long. create a new result
-                        results.append({'ref': '', 'hyp': '', 'chg': ''})
+                        results.append({'ref': '', 'hyp': '', 'chg': '', 'dif': 0})
             
                     results[-1]['ref'] += pad(gt[i + chunk.ref_start_idx], word_len) + " "
                     results[-1]['hyp'] += pad(hp[i + chunk.hyp_start_idx], word_len) + " "
                     results[-1]['chg'] += 'S' * (word_len) + ' '
+                    results[-1]['dif'] += 1
             else:
                 print(chunk)
 
-    return results, stats
+    if differences:
+        return [x for x in results if x['dif'] > 0], stats
+    else:
+        return results, stats
 
 
 def s2time(seconds):        
