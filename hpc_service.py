@@ -55,8 +55,12 @@ def main():
                 concurrent_batches = int(wconfig['cpu_batches'])
                 processing_factor = float(wconfig['cpu_factor'])
                 host_cpus = concurrent_batches * int(wconfig['cpu_count'])
-                host_ram = concurrent_batches * int(wconfig['cpu_model_ram'])
+                host_ram = concurrent_batches * int(wconfig['cpu_model_ram'])                
                 gpus = 0
+
+            logging.info(f"Initial resource request:  {host_cpus} cpus, {host_ram} RAM")
+            host_ram = min([host_ram, int(sconfig['cpu_ram'])])
+            host_cpus = min([host_cpus, int(sconfig['cpu_threads'])])
 
             target_slot_time = int(sconfig['max_slot_target'])
             max_content_time = target_slot_time * processing_factor
@@ -76,9 +80,10 @@ def main():
                 d = float(request['probes'][p['infile']]['format']['duration'])
                 p['duration'] = d
                 if batch_sizes[-1] + d > max_content_time:
-                    # start a new one
-                    batches.append([])
-                    batch_sizes.append(0)
+                    # only start a new one if there's something already in this batch
+                    if len(batches[-1]) > 0:                        
+                        batches.append([])
+                        batch_sizes.append(0)
                 batch_sizes[-1] += d
                 batches[-1].append(p)
                 
